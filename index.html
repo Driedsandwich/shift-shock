@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f4f0e5">
+  <title>Shift Shock</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="core.js" defer></script>
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <main class="sheet">
+    <header class="masthead">
+      <div><p class="eyebrow">THE VOLUNTEER DUTY BOARD <span> / </span> ONE TIME SLOT</p><h1 id="app-name"></h1></div>
+      <div class="stamp">EVENT DAY<br><strong>KEEP THINGS MOVING</strong></div>
+    </header>
+    <p class="intro">Find the smallest staffing fix when someone is absent — for small-event volunteer coordinators.</p>
+
+    <section class="toolbar" aria-label="Board controls">
+      <div class="preset-control"><label for="preset">PRESET / SCHOOL FESTIVAL</label><div class="inline"><select id="preset"><option value="haru">Haru absent · try the two-move fix</option><option value="aiko">Aiko absent · first aid shortage</option></select><button id="load" class="quiet">Load preset</button></div></div>
+      <div class="toolbar-actions"><button id="requirements" class="quiet">Post needs</button><button id="add" class="quiet">+ Add helper</button><button id="reset" class="quiet">Reset</button></div>
+    </section>
+
+    <section aria-labelledby="board-title">
+      <div class="section-heading"><h2 id="board-title"><span class="section-number">01</span> Today’s assignments</h2><p>Click a tag to mark absent. Edit or drag to reassign.</p></div>
+      <div id="board" class="board"></div>
+    </section>
+
+    <section class="repair" aria-labelledby="repair-title">
+      <div class="repair-action"><p class="eyebrow">A SMALL CHANGE. A COVERED EVENT.</p><h2 id="repair-title">Someone’s out.<br>What’s the smallest fix?</h2><p id="summary"></p><button id="solve" class="primary">Find the smallest fix <span aria-hidden="true">→</span></button><p class="fine">Fewest changed helpers → fewest floaters used → name.</p></div>
+      <div id="plan" class="plan" aria-live="polite" aria-atomic="true"></div>
+    </section>
+
+    <footer class="footer"><p><span class="live-dot" aria-hidden="true"></span> LOCAL BOARD <span class="footer-detail"> / Nothing uploaded. Export before closing.</span></p><div class="exports"><button id="csv" disabled>Download new roster (CSV)</button><button id="png" disabled>Download roster image (PNG)</button><button id="copy" disabled>Copy as text</button></div></footer>
+    <p id="notice" class="notice" role="status"></p>
+  </main>
+
+  <dialog id="helper-dialog" aria-labelledby="helper-title">
+    <form id="helper-form"><div class="dialog-heading"><h2 id="helper-title">Edit helper</h2><button type="button" class="close" data-close aria-label="Close helper editor">×</button></div><label for="helper-name">Name</label><input id="helper-name" name="name" maxlength="40" required autocomplete="off"><fieldset><legend>Posts this helper can do</legend><div id="skill-options" class="checkbox-grid"></div></fieldset><label for="helper-post">Current post</label><select id="helper-post"></select><p class="fine">One person, one post. First aid requires the First aid skill.</p><p id="helper-error" class="form-error" role="alert"></p><div class="dialog-actions"><button type="button" data-close>Cancel</button><button type="submit" class="primary">Save helper</button></div></form>
+  </dialog>
+  <dialog id="needs-dialog" aria-labelledby="needs-title"><form id="needs-form"><div class="dialog-heading"><h2 id="needs-title">People needed per post</h2><button type="button" class="close" data-close aria-label="Close post needs">×</button></div><p>Each person covers one post in this time slot. Set 0 to close a post.</p><div id="needs-options"></div><div class="dialog-actions"><button type="button" data-close>Cancel</button><button type="submit" class="primary">Save needs</button></div></form></dialog>
+  <dialog id="copy-dialog" aria-labelledby="copy-title"><div class="dialog-heading"><h2 id="copy-title">Copy your roster</h2><button type="button" class="close" data-close aria-label="Close text roster">×</button></div><p>Automatic copying is unavailable here. Select and copy the text below.</p><textarea id="copy-text" readonly aria-label="Roster to copy" rows="14"></textarea></dialog>
+</body>
+</html>

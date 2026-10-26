@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Duty board · logic tests</title><link rel="stylesheet" href="style.css"><script src="core.js"></script></head>
+<body><main class="sheet"><p class="eyebrow">OFFLINE / PURE LOGIC</p><h1>Board checks</h1><p class="intro">Deterministic assertions. No dependencies, network, or browser storage.</p><pre id="results" role="status" aria-live="polite"></pre><p><a href="index.html">Back to the duty board</a></p></main>
+<script>
+'use strict';
+(function () {
+  const C = ShiftCore;
+  const results = document.getElementById('results');
+  let failures = 0;
+  function assert(name, check) {
+    try { if (!check()) throw new Error('Assertion returned false'); results.textContent += 'PASS: ' + name + '\n'; }
+    catch (error) { failures++; results.textContent += 'FAIL: ' + name + ' — ' + error.message + '\n'; }
+  }
+  const posts = (...names) => names.map(name => ({ name, required: 1 }));
+  const helper = (name, skills, current = 'floating', absent = false) => ({ id: name, name, skills, current, absent });
+  const p = posts('Reception', 'Guide');
+  assert('An already covered roster needs zero changes', () => C.solve(p, [helper('A', ['Reception'], 'Reception'), helper('B', ['Guide'], 'Guide')]).changes === 0);
+  assert('One empty post takes one change', () => C.solve(posts('Reception'), [helper('A', ['Reception'])]).changes === 1);
+  assert('A floating helper avoids displacing an assigned helper and a replacement move', () => {
+    const r = C.solve(p, [helper('A', ['Reception', 'Guide'], 'Guide'), helper('B', ['Reception']), helper('C', ['Guide'])]);
+    return r.complete && r.changes === 1 && r.assignment.B === 'Reception' && r.assignment.A === 'Guide';
+  });
+  // The numbered objective explicitly minimizes floaters AFTER total changes.
+  assert('Equal total changes use fewer floating helpers (numbered objective)', () => {
+    const r = C.solve(p, [helper('A', ['Reception', 'Guide'], 'Guide'), helper('B', ['Guide'], 'Guide'), helper('C', ['Reception'])]);
+    return r.complete && r.changes === 1 && r.floatingUsed === 0 && r.assignment.A === 'Reception' && r.assignment.C === 'floating';
+  });
+  assert('Equal-cost plans choose helpers stably by name', () => {
+    const r = C.solve(posts('Reception'), [helper('Zoe', ['Reception']), helper('Ada', ['Reception'])]);
+    return r.assignment.Ada === 'Reception' && r.assignment.Zoe === 'floating';
+  });
+  assert('Impossible case reports the right post and absent specialist', () => {
+    const r = C.solve(posts('First aid'), [helper('Aiko', ['First aid'], 'First aid', true)]);
+    return !r.complete && r.uncovered[0].post === 'First aid' && r.uncovered[0].reason === 'First aid cannot be covered: only Aiko can do First aid and Aiko is absent.';
+  });
+  assert('A post with no skilled helper has an explicit reason', () => {
+    const r = C.solve(posts('First aid'), [helper('Ken', [], 'floating')]);
+    return r.uncovered[0].reason.includes('no helper has the First aid skill');
+  });
+  const haru = C.preset('haru');
+  const repair = C.solve(haru.posts, haru.helpers);
+  assert('Haru preset gives exactly Ken then Mina, two moves', () => repair.complete && repair.changes === 2 && JSON.stringify(repair.moves.map(m => [m.name, m.from, m.to])) === JSON.stringify([['Ken', 'Guide', 'Reception'], ['Mina', 'floating', 'Guide']]));
+  assert('Move explanations follow the vacancy chain', () => repair.moves[0].text === 'Ken: Guide -> Reception (Reception was empty; Ken can do Reception)' && repair.moves[1].text === "Mina: floating -> Guide (Guide was left empty by Ken's move)");
+  assert('The naive one-change fix explains the Guide gap', () => repair.naive.includes('Ken') && repair.naive.includes('empty Guide'));
+  const aiko = C.preset('aiko');
+  const partial = C.solve(aiko.posts, aiko.helpers);
+  assert('Aiko preset reports only First aid uncovered', () => !partial.complete && partial.uncovered.length === 1 && partial.uncovered[0].post === 'First aid');
+  assert('Aiko partial plan preserves the maximum four covered posts', () => partial.covered === 4 && partial.changes === 0);
+  assert('Identical input produces identical answers', () => JSON.stringify(repair) === JSON.stringify(C.solve(haru.posts, haru.helpers)));
+  assert('Input order does not change the solution', () => JSON.stringify(repair) === JSON.stringify(C.solve(haru.posts, haru.helpers.slice().reverse())));
+  assert('Solving does not mutate the input', () => {
+    const input = C.preset(); const before = JSON.stringify(input); C.solve(input.posts, input.helpers); return JSON.stringify(input) === before;
+  });
+  assert('Multiple absences are excluded from all assignments', () => {
+    const input = C.preset(); input.helpers.find(h => h.id === 'aiko').absent = true;
+    const r = C.solve(input.posts, input.helpers);
+    return r.covered === 4 && r.changes === 2 && !('haru' in r.assignment) && !('aiko' in r.assignment);
+  });
+  assert('Shared-skill shortage explains competing posts', () => {
+    const r = C.solve(p, [helper('Ken', ['Reception', 'Guide'])]);
+    return r.covered === 1 && r.uncovered.length === 1 && r.uncovered[0].reason.includes('Reception + Guide need 2 people, but only 1 available (Ken)');
+  });
+  assert('Partial plans move people when doing so covers more posts', () => {
+    const r = C.solve(posts('Reception', 'Guide', 'First aid'), [helper('Ken', ['Reception', 'Guide'], 'Guide'), helper('Mina', ['Guide'])]);
+    return !r.complete && r.covered === 2 && r.changes === 2 && r.uncovered[0].post === 'First aid';
+  });
+  assert('A two-person post needs two distinct helpers', () => {
+    const r = C.solve([{ name: 'Reception', required: 2 }], [helper('A', ['Reception'], 'Reception'), helper('B', ['Reception'])]);
+    return r.complete && r.covered === 2 && r.changes === 1;
+  });
+  assert('A partially staffed two-person post reports its missing place', () => {
+    const r = C.solve([{ name: 'Reception', required: 2 }], [helper('A', ['Reception'], 'Reception')]);
+    return !r.complete && r.covered === 1 && r.uncovered[0].missing === 1 && r.uncovered[0].reason.includes('need 2 people');
+  });
+  assert('Surplus assigned helpers can stay without unnecessary moves', () => C.solve(posts('Reception'), [helper('A', ['Reception'], 'Reception'), helper('B', ['Reception'], 'Reception')]).changes === 0);
+  assert('A closed post requires no coverage', () => C.solve([{ name: 'Reception', required: 0 }], []).complete);
+  assert('An empty roster produces an honest partial plan', () => { const r = C.solve(p, []); return !r.complete && r.covered === 0 && r.uncovered.length === 2; });
+  assert('Helpers cannot cover a post without its skill', () => {
+    const r = C.solve(posts('First aid'), [helper('A', [], 'First aid')]);
+    return !r.complete && r.covered === 0 && r.assignment.A === 'floating';
+  });
+  assert('CSV escapes quotes, commas, and formula-like names', () => {
+    const csv = C.csv(posts('Reception'), [helper('=A,"B"', ['Reception'])]);
+    return csv.includes('"\'=A,""B"""') && csv.includes('"Original post","New post"');
+  });
+  assert('An absent helper is explicitly marked absent in exports', () => C.rosterRows(aiko.posts, aiko.helpers, partial.assignment).find(row => row[0] === 'Aiko')[3] === 'Absent');
+  assert('More than ten helpers is rejected', () => {
+    try { C.solve(p, Array.from({ length: 11 }, (_, i) => helper(String(i), []))); return false; } catch (_) { return true; }
+  });
+
+  // Independent brute force oracle: no coverage-state merging or pruning.
+  function bruteForce(testPosts, helpers) {
+    const active = helpers.filter(h => !h.absent);
+    let best = [-1, Infinity, Infinity];
+    function visit(index, assigned) {
+      if (index === active.length) {
+        const covered = testPosts.reduce((sum, p) => sum + Math.min(p.required, assigned.filter(name => name === p.name).length), 0);
+        const changed = active.reduce((sum, h, i) => sum + Number(h.current !== assigned[i]), 0);
+        const floats = active.reduce((sum, h, i) => sum + Number(h.current === 'floating' && assigned[i] !== 'floating'), 0);
+        if (covered > best[0] || covered === best[0] && (changed < best[1] || changed === best[1] && floats < best[2])) best = [covered, changed, floats];
+        return;
+      }
+      ['floating', ...active[index].skills].forEach(to => visit(index + 1, assigned.concat(to)));
+    }
+    visit(0, []);
+    return best;
+  }
+  assert('100 seeded small rosters match exhaustive optimal coverage and both costs', () => {
+    let seed = 712;
+    function random(n) { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed % n; }
+    for (let test = 0; test < 100; test++) {
+      const ps = ['Reception', 'Guide', 'Stage'].map(name => ({ name, required: random(3) }));
+      const hs = Array.from({ length: 5 }, (_, i) => {
+        const skills = ps.filter(() => random(3) > 0).map(p => p.name);
+        const choices = ['floating', ...skills];
+        return helper('Person ' + i, skills, choices[random(choices.length)], random(5) === 0);
+      });
+      const r = C.solve(ps, hs);
+      if (JSON.stringify([r.covered, r.changes, r.floatingUsed]) !== JSON.stringify(bruteForce(ps, hs))) return false;
+    }
+    return true;
+  });
+  assert('Ten versatile helpers across six posts remain deterministic', () => {
+    const ps = posts('Reception', 'Guide', 'Stage', 'Kitchen', 'First aid', 'Cleanup');
+    const hs = Array.from({ length: 10 }, (_, i) => helper('Person ' + i, ps.map(p => p.name)));
+    const r = C.solve(ps, hs);
+    return r.complete && r.changes === 6 && JSON.stringify(r) === JSON.stringify(C.solve(ps, hs));
+  });
+  results.textContent += failures ? 'FAILURES: ' + failures : 'ALL PASS';
+})();
+</script></body></html>
